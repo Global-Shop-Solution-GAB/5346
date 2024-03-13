@@ -1,0 +1,60 @@
+Program.Sub.Preflight.Start
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+f.Intrinsic.Control.If(v.Caller.Hook,=,"16850")
+	v.Passed.000065.Set("Galv Conv.")
+f.Intrinsic.Control.Else
+	'16890
+	f.Intrinsic.Control.Try
+		F.Intrinsic.UI.InvokeWaitDialog("Processing Galv Conversion.")
+		F.ODBC.Connection!CON.openconnection(v.Ambient.PDSN,v.Ambient.PUser,v.Ambient.PPass)
+		v.Local.i.Declare(long)
+		v.Local.ssql.Declare(string)
+		v.Local.sPONum.Declare(string)
+		v.Local.sPartN.Declare(string)
+		v.Local.sVendr.Declare(string)
+		v.Local.sRecNo.Declare(string)
+		V.Local.sErrMs.Declare(string)
+		v.Local.fPOQty.Declare(float)
+		v.Local.fQtyRn.Declare(float)
+		v.Local.fQtyNw.Declare(float)
+		
+		v.Local.sVendr.Set(v.Passed.000011)
+		f.Intrinsic.String.LPad(v.Passed.000008,"0",7,v.Local.sPONum)
+		f.Intrinsic.String.Build("SELECT * FROM V_PO_LINES WHERE PURCHASE_ORDER='{0}'",v.Local.sPONum,v.Local.sSQL)
+		F.Data.DataTable.CreateFromSQL("dt","con",v.Local.sSQL)
+		f.Intrinsic.Control.For(v.Local.i,0,v.DataTable.dt.RowCount--,1)
+			'Set part value, take out * and Set PO Qty, RecNo
+			v.Local.spartn.Set(v.DataTable.dt(v.Local.i).PART!FIELDVALTRIM)
+			F.Intrinsic.String.Replace(v.Local.sPartN,"*"," ",v.Local.sPartN)
+			v.Local.fPOQty.Set(v.DataTable.dt(v.Local.i).QTY_ORDER!FIELDVAL)
+			v.Local.sRecNo.Set(v.DataTable.dt(v.Local.i).RECORD_NO!FIELDVALTRIM)
+			'Grab where router=part on PO line without the star, outside process, and the vendor number
+			f.Intrinsic.String.Build("SELECT ifnull(RUN_TIME,0) FROM V_ROUTER_LINE WHERE ROUTER='{0}' AND OPERATION='{1}' AND LMO='O'",v.Local.sPartN.Trim,v.Local.sVendr,v.Local.sSQL)
+			f.ODBC.Connection!CON.executeandreturn(v.Local.sSQL,v.Local.fQtyRn)
+			'Double check for zeros
+			f.Intrinsic.Control.If(v.Local.fQtyRn,=,0,"or",v.Local.fPOQty,=,0)
+				f.Intrinsic.String.Concat(v.Local.sErrMs,"Error on part ",V.Local.sPartN.Trim," line ",v.Local.sRecNo,".  PO or Run Qty is 0.",v.Ambient.NewLine,v.Local.sErrMs)
+			f.Intrinsic.Control.Else
+				f.Intrinsic.Math.Div(v.Local.fPOQty,v.Local.fQtyRn,v.Local.fQtyNw)
+				f.Intrinsic.String.Build("UPDATE PO_LINES SET USER_5='{0}' WHERE RECORD_NO='{1}'",v.Local.fQtyNw,v.Local.sRecNo,v.Local.sSQL)
+				f.ODBC.Connection!CON.execute(v.Local.sSQL)
+			f.Intrinsic.Control.EndIf
+		f.Intrinsic.Control.Next(v.local.i)
+		f.Intrinsic.Control.If(v.Local.sErrMs.Trim,=,"")
+			f.Intrinsic.UI.Msgbox("Successfully updated User 5 fields for all lines.")
+		f.Intrinsic.Control.Else
+			f.Intrinsic.UI.Msgbox(v.Local.sErrMs)
+		f.Intrinsic.Control.EndIf
+		f.ODBC.Connection!CON.Close
+		f.Intrinsic.UI.CloseWaitDialog
+		f.Intrinsic.Control.end
+	f.Intrinsic.Control.Catch
+		f.Intrinsic.UI.Msgbox(v.Ambient.ErrorDescription)
+		f.ODBC.Connection!CON.Close
+		f.Intrinsic.UI.CloseWaitDialog
+		f.Intrinsic.Control.End
+	f.Intrinsic.Control.EndTry
+f.Intrinsic.Control.EndIf
+Program.Sub.Main.End
